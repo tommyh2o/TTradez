@@ -53,3 +53,21 @@ class Trade(Base):
     payout_per_contract: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CashMovementType(str, enum.Enum):
+    DEPOSIT = "DEPOSIT"
+    WITHDRAWAL = "WITHDRAWAL"
+
+
+class CashMovement(Base):
+    __tablename__ = "cash_movements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    movement_type: Mapped[CashMovementType] = mapped_column(
+        Enum(CashMovementType), nullable=False
+    )
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    moved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

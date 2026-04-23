@@ -1,14 +1,14 @@
 # TTradez
 
-TTradez is a full-stack trading journal for both traditional stock trades and Robinhood-style
-prediction market contracts.
+TTradez is a full-stack prediction market journal and bankroll tracker built around
+Robinhood-style YES/NO contracts.
 
 ## What it does
 
-- Log equity buys and sells
 - Log prediction market YES/NO contracts
-- Keep a unified journal feed with notes
-- Show simple open-position summaries
+- Log cash deposits and withdrawals
+- Keep a unified journal feed for trades and bankroll movements
+- Show account balance, open positions, and running profitability
 
 ## Project layout
 
@@ -17,18 +17,28 @@ prediction market contracts.
 
 ## Data model
 
-The first version uses a single `trades` table with fields that work for both market types:
+The current version uses:
 
-- `market_type`: `EQUITY` or `PREDICTION`
-- `action`: `BUY` or `SELL`
-- `ticker`: required for equities
-- `instrument_name`: company name or prediction market question
-- `prediction_side`: `YES` or `NO` for prediction contracts
-- `quantity`, `price`, `fees`, `executed_at`
-- `expires_at`, `resolution_status`, `outcome`, `payout_per_contract`
-- `notes`
+- `trades`
+  - prediction market question
+  - `YES` / `NO` side
+  - contracts bought
+  - buy price per contract
+  - optional sell price per contract
+  - ongoing / complete status
+  - fees, date, notes
+- `cash_movements`
+  - `DEPOSIT` or `WITHDRAWAL`
+  - amount
+  - date
+  - notes
 
-This keeps the journal unified while still allowing prediction-specific fields where needed.
+Account balance is derived from:
+
+- deposits
+- withdrawals
+- open prediction positions tying up cash
+- completed trade profit or loss
 
 ## Run locally
 
