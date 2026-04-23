@@ -376,6 +376,17 @@ dd {
   margin-bottom: 18px;
 }
 
+.backup-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.backup-actions input[type="file"] {
+  max-width: 320px;
+}
+
 .edit-actions {
   grid-column: span 2;
   display: flex;

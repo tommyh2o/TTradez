@@ -1,3 +1,5 @@
+from datetime import datetime, UTC
+
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
@@ -6,6 +8,9 @@ from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from .models import CashMovement, CashMovementType, MarketType, ResolutionStatus, Trade, TradeAction
 from .schemas import (
+    BackupCashMovement,
+    BackupPayload,
+    BackupTrade,
     CashMovementCreate,
     CashMovementRead,
     JournalEntry,
@@ -117,6 +122,84 @@ def get_balance_components(db: Session) -> tuple[float, float, float]:
 @app.get("/health")
 def healthcheck():
     return {"status": "ok"}
+
+
+@app.get("/backup", response_model=BackupPayload)
+def export_backup(db: Session = Depends(get_db)):
+    trades = db.scalars(
+        select(Trade)
+        .where(Trade.market_type == MarketType.PREDICTION)
+        .order_by(Trade.executed_at.asc(), Trade.id.asc())
+    ).all()
+    cash_movements = db.scalars(
+        select(CashMovement).order_by(CashMovement.moved_at.asc(), CashMovement.id.asc())
+    ).all()
+
+    return BackupPayload(
+        exported_at=datetime.now(UTC),
+        trades=[
+            BackupTrade(
+                instrument_name=trade.instrument_name,
+                prediction_side=trade.prediction_side,
+                quantity=trade.quantity,
+                price=trade.price,
+                fees=trade.fees,
+                executed_at=trade.executed_at,
+                resolution_status=trade.resolution_status,
+                payout_per_contract=trade.payout_per_contract,
+                notes=trade.notes,
+            )
+            for trade in trades
+        ],
+        cash_movements=[
+            BackupCashMovement(
+                movement_type=movement.movement_type,
+                amount=movement.amount,
+                moved_at=movement.moved_at,
+                notes=movement.notes,
+            )
+            for movement in cash_movements
+        ],
+    )
+
+
+@app.post("/import", status_code=204)
+def import_backup(payload: BackupPayload, db: Session = Depends(get_db)):
+    db.query(CashMovement).delete()
+    db.query(Trade).delete()
+
+    for trade in payload.trades:
+        db.add(
+            Trade(
+                market_type=MarketType.PREDICTION,
+                action=TradeAction.BUY,
+                ticker=None,
+                instrument_name=trade.instrument_name,
+                prediction_side=trade.prediction_side,
+                quantity=trade.quantity,
+                price=trade.price,
+                fees=trade.fees,
+                executed_at=trade.executed_at,
+                resolution_status=trade.resolution_status,
+                payout_per_contract=trade.payout_per_contract,
+                notes=trade.notes,
+                expires_at=None,
+                outcome=None,
+            )
+        )
+
+    for movement in payload.cash_movements:
+        db.add(
+            CashMovement(
+                movement_type=movement.movement_type,
+                amount=movement.amount,
+                moved_at=movement.moved_at,
+                notes=movement.notes,
+            )
+        )
+
+    db.commit()
+    return Response(status_code=204)
 
 
 @app.get("/trades", response_model=list[TradeRead])

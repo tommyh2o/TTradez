@@ -140,3 +140,29 @@ class JournalSummary(BaseModel):
     total_deposits: float
     total_withdrawals: float
     open_positions: list[PositionSummary]
+
+
+class BackupTrade(BaseModel):
+    instrument_name: str
+    prediction_side: ContractSide
+    quantity: float
+    price: float
+    fees: float
+    executed_at: datetime
+    resolution_status: ResolutionStatus
+    payout_per_contract: float | None = None
+    notes: str | None = None
+
+
+class BackupCashMovement(BaseModel):
+    movement_type: CashMovementType
+    amount: float
+    moved_at: datetime
+    notes: str | None = None
+
+
+class BackupPayload(BaseModel):
+    version: int = 1
+    exported_at: datetime
+    trades: list[BackupTrade]
+    cash_movements: list[BackupCashMovement]

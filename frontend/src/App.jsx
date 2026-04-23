@@ -182,6 +182,7 @@ function App() {
   const [editForm, setEditForm] = useState(defaultTradeForm);
   const [activeView, setActiveView] = useState("dashboard");
   const [entryMode, setEntryMode] = useState("trade");
+  const [importFile, setImportFile] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -341,6 +342,66 @@ function App() {
       await loadData();
     } catch (err) {
       setError(typeof err.message === "string" ? err.message : "Unable to delete entry.");
+    }
+  }
+
+  async function handleExport() {
+    setError("");
+
+    try {
+      const response = await fetch(`${API_BASE}/backup`);
+      if (!response.ok) {
+        throw new Error("Unable to export backup.");
+      }
+
+      const payload = await response.json();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `ttradez-backup-${stamp}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(typeof err.message === "string" ? err.message : "Unable to export backup.");
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile) {
+      setError("Choose a backup JSON file first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Importing a backup will replace your current TTradez data. Continue?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      const text = await importFile.text();
+      const response = await fetch(`${API_BASE}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: text,
+      });
+
+      if (!response.ok) {
+        const details = await response.json();
+        throw new Error(details.detail || "Import failed");
+      }
+
+      setImportFile(null);
+      await loadData();
+    } catch (err) {
+      setError(typeof err.message === "string" ? err.message : "Unable to import backup.");
     }
   }
 
@@ -629,6 +690,31 @@ function App() {
         </main>
       ) : (
         <main className="dashboard-layout">
+          <section className="panel">
+            <div className="panel-heading">
+              <h2>Backup data</h2>
+              <p>Export a JSON backup or restore from one. Import replaces current data.</p>
+            </div>
+            <div className="backup-actions">
+              <button type="button" onClick={handleExport}>
+                Export backup
+              </button>
+              <input
+                type="file"
+                accept="application/json"
+                onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleImport}
+                disabled={!importFile}
+              >
+                Import backup
+              </button>
+            </div>
+          </section>
+
           <section className="panel">
             <div className="panel-heading">
               <h2>Profitability</h2>
