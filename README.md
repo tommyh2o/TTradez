@@ -1,33 +1,69 @@
 # TTradez
 
-A full-stack trading journal:
-- Log buy/sell transactions
-- View combined positions (total shares, avg cost, P/L)
-- Watchlist + live prices (later)
+TTradez is a full-stack trading journal for both traditional stock trades and Robinhood-style
+prediction market contracts.
 
-Tech:
-- Frontend: React (Vite)
-- Backend: Python (FastAPI)
-- DB: SQLite (dev), Postgres (later)
+## What it does
 
-## Data Model Approach
-### users
-- id (PK)
-- email (unique)
-- password_hash
-- created_at
+- Log equity buys and sells
+- Log prediction market YES/NO contracts
+- Keep a unified journal feed with notes
+- Show simple open-position summaries
 
-### transactions
-- id (PK)
-- user_id (FK)
-- ticker
-- side (BUY / SELL)
-- shares
-- price
-- fees
-- executed_at
+## Project layout
 
-### watchlist
-- id (PK)
-- user_id (FK)
-- ticker
+- `frontend/`: React + Vite interface for entering trades and reviewing the journal
+- `backend/`: FastAPI API backed by SQLite
+
+## Data model
+
+The first version uses a single `trades` table with fields that work for both market types:
+
+- `market_type`: `EQUITY` or `PREDICTION`
+- `action`: `BUY` or `SELL`
+- `ticker`: required for equities
+- `instrument_name`: company name or prediction market question
+- `prediction_side`: `YES` or `NO` for prediction contracts
+- `quantity`, `price`, `fees`, `executed_at`
+- `expires_at`, `resolution_status`, `outcome`, `payout_per_contract`
+- `notes`
+
+This keeps the journal unified while still allowing prediction-specific fields where needed.
+
+## Run locally
+
+### One command
+
+From the repo root:
+
+```bash
+npm install
+npm run dev:all
+```
+
+This starts both:
+
+- FastAPI on `http://127.0.0.1:8000`
+- Vite on `http://127.0.0.1:5173`
+
+Make sure you have already created the backend virtualenv and installed backend dependencies once.
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+With both running, open `http://127.0.0.1:5173`.
