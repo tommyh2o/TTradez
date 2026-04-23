@@ -1,8 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .models import ContractSide, MarketType, ResolutionStatus, TradeAction
+from .models import CashMovementType, ContractSide, MarketType, ResolutionStatus, TradeAction
 
 
 def normalize_status(status: ResolutionStatus) -> ResolutionStatus:
@@ -14,42 +15,23 @@ def normalize_status(status: ResolutionStatus) -> ResolutionStatus:
 
 
 class TradeBase(BaseModel):
-    market_type: MarketType
-    action: TradeAction = TradeAction.BUY
-    ticker: str | None = None
     instrument_name: str = Field(min_length=1, max_length=255)
-    prediction_side: ContractSide | None = None
+    prediction_side: ContractSide
     quantity: float = Field(gt=0)
-    price: float = Field(ge=0)
+    price: float = Field(ge=0, le=1)
     fees: float = Field(default=0, ge=0)
     executed_at: datetime
-    expires_at: datetime | None = None
     resolution_status: ResolutionStatus = ResolutionStatus.ONGOING
-    outcome: str | None = None
-    payout_per_contract: float | None = Field(default=None, ge=0)
+    payout_per_contract: float | None = Field(default=None, ge=0, le=1)
     notes: str | None = None
 
     @model_validator(mode="after")
     def validate_trade_shape(self):
         self.resolution_status = normalize_status(self.resolution_status)
-
-        if self.market_type == MarketType.EQUITY:
-            if not self.ticker:
-                raise ValueError("Equity trades require a ticker.")
-            self.prediction_side = None
-            self.expires_at = None
-            self.outcome = None
-
-        if self.market_type == MarketType.PREDICTION:
-            if not self.prediction_side:
-                raise ValueError("Prediction trades require a YES/NO side.")
-
         if self.resolution_status == ResolutionStatus.ONGOING:
             self.payout_per_contract = None
-
         if self.resolution_status == ResolutionStatus.COMPLETE and self.payout_per_contract is None:
             raise ValueError("Complete trades require a sell price.")
-
         return self
 
 
@@ -64,38 +46,97 @@ class TradeUpdate(TradeBase):
 class TradeRead(TradeBase):
     id: int
     created_at: datetime
+    market_type: MarketType = MarketType.PREDICTION
+    action: TradeAction = TradeAction.BUY
     amount_spent: float = 0
+    proceeds: float = 0
     net_profit: float = 0
+    cash_impact: float = 0
 
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode="after")
     def attach_calculated_fields(self):
         self.resolution_status = normalize_status(self.resolution_status)
-        self.amount_spent = round(self.quantity * self.price, 2)
-        if self.resolution_status == ResolutionStatus.COMPLETE and self.payout_per_contract is not None:
-            gross_sale = self.quantity * self.payout_per_contract
-            self.net_profit = round(gross_sale - self.amount_spent - self.fees, 2)
+        gross_entry = self.quantity * self.price
+        self.amount_spent = round(gross_entry + self.fees, 2)
+
+        if self.payout_per_contract is not None:
+            gross_exit = self.quantity * self.payout_per_contract
+            exit_fees = self.fees if 0 < self.payout_per_contract < 1 else 0
+            self.proceeds = round(max(gross_exit - exit_fees, 0), 2)
         else:
-            self.net_profit = round(0 - self.amount_spent - self.fees, 2)
+            self.proceeds = 0
+
+        if self.resolution_status == ResolutionStatus.COMPLETE and self.payout_per_contract is not None:
+            self.net_profit = round(self.proceeds - self.amount_spent, 2)
+            self.cash_impact = self.net_profit
+        else:
+            self.net_profit = round(-self.amount_spent, 2)
+            self.cash_impact = self.net_profit
+        return self
+
+
+class CashMovementBase(BaseModel):
+    movement_type: CashMovementType
+    amount: float = Field(gt=0)
+    moved_at: datetime
+    notes: str | None = None
+
+
+class CashMovementCreate(CashMovementBase):
+    pass
+
+
+class CashMovementRead(CashMovementBase):
+    id: int
+    created_at: datetime
+    signed_amount: float = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def attach_signed_amount(self):
+        multiplier = 1 if self.movement_type == CashMovementType.DEPOSIT else -1
+        self.signed_amount = round(multiplier * self.amount, 2)
         return self
 
 
 class PositionSummary(BaseModel):
     key: str
-    market_type: MarketType
     instrument_name: str
-    ticker: str | None = None
-    prediction_side: ContractSide | None = None
+    prediction_side: ContractSide
     open_quantity: float
     average_cost: float
-    net_cash_flow: float
     total_fees: float
     amount_spent: float
 
 
+class JournalEntry(BaseModel):
+    id: int
+    entry_kind: Literal["TRADE", "CASH"]
+    title: str
+    subtitle: str
+    date: datetime
+    notes: str | None = None
+    amount_spent: float | None = None
+    proceeds: float | None = None
+    net_profit: float | None = None
+    cash_impact: float
+    status: str
+    quantity: float | None = None
+    buy_price: float | None = None
+    sell_price: float | None = None
+    fees: float | None = None
+    prediction_side: ContractSide | None = None
+    movement_type: CashMovementType | None = None
+
+
 class JournalSummary(BaseModel):
-    total_trades: int
-    equities_logged: int
+    total_entries: int
     prediction_trades_logged: int
+    cash_movements_logged: int
+    account_balance: float
+    total_deposits: float
+    total_withdrawals: float
     open_positions: list[PositionSummary]
