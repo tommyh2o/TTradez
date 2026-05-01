@@ -415,6 +415,10 @@ dd {
   stroke-width: 1;
 }
 
+.chart-axis.baseline {
+  stroke: rgba(255, 255, 255, 0.28);
+}
+
 .chart-grid-line {
   stroke: rgba(255, 255, 255, 0.08);
   stroke-width: 1;
@@ -422,7 +426,6 @@ dd {
 }
 
 .chart-line {
-  fill: none;
   stroke: #38bdf8;
   stroke-width: 3;
   stroke-linecap: round;
@@ -478,6 +481,19 @@ dd {
 }
 
 .chart-tooltip-value.negative {
+  fill: #fca5a5;
+}
+
+.chart-tooltip-subvalue {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-tooltip-subvalue.positive {
+  fill: #86efac;
+}
+
+.chart-tooltip-subvalue.negative {
   fill: #fca5a5;
 }
 

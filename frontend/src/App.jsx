@@ -99,29 +99,49 @@ function tradeToForm(trade) {
 }
 
 function buildProfitSeries(entries) {
-  let runningProfit = 0;
+  let runningAccountValue = 0;
+  let tradeIndex = 0;
+  let baselineValue = null;
 
-  return entries
-    .filter((entry) => entry.entry_kind === "TRADE")
+  const series = entries
     .slice()
     .reverse()
-    .map((entry, index) => {
-      runningProfit += Number(entry.net_profit || 0);
-      return {
-        label: `${index + 1}`,
-        title: entry.title,
-        tradeProfit: Number((entry.net_profit || 0).toFixed(2)),
-        value: Number(runningProfit.toFixed(2)),
-      };
+    .flatMap((entry) => {
+      runningAccountValue += Number(entry.cash_impact || 0);
+
+      if (baselineValue === null && entry.entry_kind === "TRADE") {
+        baselineValue = Number(
+          (runningAccountValue - Number(entry.cash_impact || 0)).toFixed(2),
+        );
+      }
+
+      if (entry.entry_kind !== "TRADE") {
+        return [];
+      }
+
+      tradeIndex += 1;
+      return [
+        {
+          label: `${tradeIndex}`,
+          title: entry.title,
+          tradeProfit: Number((entry.net_profit || 0).toFixed(2)),
+          value: Number(runningAccountValue.toFixed(2)),
+        },
+      ];
     });
+
+  return {
+    baselineValue: baselineValue ?? 0,
+    series,
+  };
 }
 
 function ProfitChart({ entries }) {
-  const series = buildProfitSeries(entries);
+  const { baselineValue, series } = buildProfitSeries(entries);
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
   if (series.length === 0) {
-    return <p className="empty">Profitability chart will appear once you log prediction trades.</p>;
+    return <p className="empty">Account value chart will appear once you log prediction trades.</p>;
   }
 
   const width = 520;
@@ -131,8 +151,12 @@ function ProfitChart({ entries }) {
   const topPadding = 24;
   const bottomPadding = 24;
   const values = series.map((point) => point.value);
-  const minValue = Math.min(0, ...values);
-  const maxValue = Math.max(0, ...values);
+  const maxDistanceFromBaseline = Math.max(
+    1,
+    ...values.map((value) => Math.abs(value - baselineValue)),
+  );
+  const minValue = baselineValue - maxDistanceFromBaseline;
+  const maxValue = baselineValue + maxDistanceFromBaseline;
   const range = maxValue - minValue || 1;
   const stepX =
     series.length === 1 ? 0 : (width - leftPadding - rightPadding) / (series.length - 1);
@@ -146,12 +170,11 @@ function ProfitChart({ entries }) {
     return { ...point, x, y };
   });
 
-  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  const zeroY =
+  const baselineY =
     height -
     bottomPadding -
-    ((0 - minValue) / range) * (height - topPadding - bottomPadding);
-  const yTicks = [maxValue, maxValue - range / 2, minValue].map((value) =>
+    ((baselineValue - minValue) / range) * (height - topPadding - bottomPadding);
+  const yTicks = [maxValue, baselineValue, minValue].map((value) =>
     Number(value.toFixed(2)),
   );
 
@@ -170,9 +193,9 @@ function ProfitChart({ entries }) {
         <line
           x1={leftPadding}
           x2={width - rightPadding}
-          y1={zeroY}
-          y2={zeroY}
-          className="chart-axis"
+          y1={baselineY}
+          y2={baselineY}
+          className="chart-axis baseline"
         />
         {yTicks.map((tickValue) => {
           const tickY =
@@ -198,7 +221,19 @@ function ProfitChart({ entries }) {
             </g>
           );
         })}
-        <path d={path} className="chart-line" />
+        {points.slice(1).map((point, index) => {
+          const previousPoint = points[index];
+          return (
+            <line
+              key={`${previousPoint.label}-${point.label}`}
+              x1={previousPoint.x}
+              y1={previousPoint.y}
+              x2={point.x}
+              y2={point.y}
+              className="chart-line"
+            />
+          );
+        })}
         {points.map((point) => (
           <g key={point.label}>
             <circle
@@ -213,7 +248,7 @@ function ProfitChart({ entries }) {
               cx={point.x}
               cy={point.y}
               r="4"
-              className={point.value >= 0 ? "chart-point positive" : "chart-point negative"}
+              className={point.tradeProfit >= 0 ? "chart-point positive" : "chart-point negative"}
             />
             <text x={point.x} y={height - 6} textAnchor="middle" className="chart-label">
               {point.label}
@@ -235,18 +270,25 @@ function ProfitChart({ entries }) {
             </text>
             <text
               x={tooltipX + 12}
-              y={tooltipY + 35}
+              y={tooltipY + 31}
               className={hoveredPoint.tradeProfit >= 0 ? "chart-tooltip-value positive" : "chart-tooltip-value negative"}
             >
               P/L {hoveredPoint.tradeProfit >= 0 ? "+" : ""}${formatMoney(hoveredPoint.tradeProfit)}
+            </text>
+            <text
+              x={tooltipX + 12}
+              y={tooltipY + 43}
+              className={hoveredPoint.tradeProfit >= 0 ? "chart-tooltip-subvalue positive" : "chart-tooltip-subvalue negative"}
+            >
+              Account ${formatMoney(hoveredPoint.value)}
             </text>
           </g>
         ) : null}
       </svg>
       <div className="chart-legend">
-        <span>Prediction trade sequence with running P/L</span>
-        <strong className={series.at(-1).value >= 0 ? "profit positive" : "profit negative"}>
-          Running P/L: ${formatMoney(series.at(-1).value)}
+        <span>Prediction trade sequence with account value vs. initial bankroll</span>
+        <strong className={series.at(-1).value >= baselineValue ? "profit positive" : "profit negative"}>
+          Latest account value: ${formatMoney(series.at(-1).value)}
         </strong>
       </div>
     </div>
@@ -807,8 +849,8 @@ function App() {
 
           <section className="panel">
             <div className="panel-heading">
-              <h2>Profitability</h2>
-              <p>Running profit and loss across your prediction trade history.</p>
+              <h2>Account Value</h2>
+              <p>See how your bankroll changed after each prediction trade.</p>
             </div>
             <ProfitChart entries={journalEntries} />
           </section>
