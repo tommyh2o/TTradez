@@ -109,6 +109,8 @@ function buildProfitSeries(entries) {
       runningProfit += Number(entry.net_profit || 0);
       return {
         label: `${index + 1}`,
+        title: entry.title,
+        tradeProfit: Number((entry.net_profit || 0).toFixed(2)),
         value: Number(runningProfit.toFixed(2)),
       };
     });
@@ -116,6 +118,7 @@ function buildProfitSeries(entries) {
 
 function ProfitChart({ entries }) {
   const series = buildProfitSeries(entries);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   if (series.length === 0) {
     return <p className="empty">Profitability chart will appear once you log prediction trades.</p>;
@@ -123,38 +126,125 @@ function ProfitChart({ entries }) {
 
   const width = 520;
   const height = 220;
-  const padding = 24;
+  const leftPadding = 64;
+  const rightPadding = 24;
+  const topPadding = 24;
+  const bottomPadding = 24;
   const values = series.map((point) => point.value);
   const minValue = Math.min(0, ...values);
   const maxValue = Math.max(0, ...values);
   const range = maxValue - minValue || 1;
-  const stepX = series.length === 1 ? 0 : (width - padding * 2) / (series.length - 1);
+  const stepX =
+    series.length === 1 ? 0 : (width - leftPadding - rightPadding) / (series.length - 1);
 
   const points = series.map((point, index) => {
-    const x = padding + index * stepX;
-    const y = height - padding - ((point.value - minValue) / range) * (height - padding * 2);
+    const x = leftPadding + index * stepX;
+    const y =
+      height -
+      bottomPadding -
+      ((point.value - minValue) / range) * (height - topPadding - bottomPadding);
     return { ...point, x, y };
   });
 
   const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-  const zeroY = height - padding - ((0 - minValue) / range) * (height - padding * 2);
+  const zeroY =
+    height -
+    bottomPadding -
+    ((0 - minValue) / range) * (height - topPadding - bottomPadding);
+  const yTicks = [maxValue, maxValue - range / 2, minValue].map((value) =>
+    Number(value.toFixed(2)),
+  );
+
+  const tooltipWidth = 126;
+  const tooltipHeight = 46;
+  const tooltipX = hoveredPoint
+    ? Math.min(Math.max(hoveredPoint.x - tooltipWidth / 2, leftPadding), width - rightPadding - tooltipWidth)
+    : 0;
+  const tooltipY = hoveredPoint
+    ? Math.max(hoveredPoint.y - tooltipHeight - 14, topPadding)
+    : 0;
 
   return (
     <div className="chart-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} className="profit-chart" role="img" aria-label="Profitability by trade">
-        <line x1={padding} x2={width - padding} y1={zeroY} y2={zeroY} className="chart-axis" />
+        <line
+          x1={leftPadding}
+          x2={width - rightPadding}
+          y1={zeroY}
+          y2={zeroY}
+          className="chart-axis"
+        />
+        {yTicks.map((tickValue) => {
+          const tickY =
+            height -
+            bottomPadding -
+            ((tickValue - minValue) / range) * (height - topPadding - bottomPadding);
+          return (
+            <g key={tickValue}>
+              <line
+                x1={leftPadding}
+                x2={width - rightPadding}
+                y1={tickY}
+                y2={tickY}
+                className="chart-grid-line"
+              />
+              <text
+                x={12}
+                y={tickY + 4}
+                className="chart-y-label"
+              >
+                ${formatMoney(tickValue)}
+              </text>
+            </g>
+          );
+        })}
         <path d={path} className="chart-line" />
         {points.map((point) => (
           <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="4" className={point.value >= 0 ? "chart-point positive" : "chart-point negative"} />
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="9"
+              className="chart-hit-area"
+              onMouseEnter={() => setHoveredPoint(point)}
+              onMouseLeave={() => setHoveredPoint(null)}
+            />
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="4"
+              className={point.value >= 0 ? "chart-point positive" : "chart-point negative"}
+            />
             <text x={point.x} y={height - 6} textAnchor="middle" className="chart-label">
               {point.label}
             </text>
           </g>
         ))}
+        {hoveredPoint ? (
+          <g className="chart-tooltip" pointerEvents="none">
+            <rect
+              x={tooltipX}
+              y={tooltipY}
+              width={tooltipWidth}
+              height={tooltipHeight}
+              rx="12"
+              className="chart-tooltip-box"
+            />
+            <text x={tooltipX + 12} y={tooltipY + 18} className="chart-tooltip-title">
+              Trade {hoveredPoint.label}
+            </text>
+            <text
+              x={tooltipX + 12}
+              y={tooltipY + 35}
+              className={hoveredPoint.tradeProfit >= 0 ? "chart-tooltip-value positive" : "chart-tooltip-value negative"}
+            >
+              P/L {hoveredPoint.tradeProfit >= 0 ? "+" : ""}${formatMoney(hoveredPoint.tradeProfit)}
+            </text>
+          </g>
+        ) : null}
       </svg>
       <div className="chart-legend">
-        <span>Prediction trade sequence</span>
+        <span>Prediction trade sequence with running P/L</span>
         <strong className={series.at(-1).value >= 0 ? "profit positive" : "profit negative"}>
           Running P/L: ${formatMoney(series.at(-1).value)}
         </strong>

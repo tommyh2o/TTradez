@@ -415,6 +415,12 @@ dd {
   stroke-width: 1;
 }
 
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
 .chart-line {
   fill: none;
   stroke: #38bdf8;
@@ -428,6 +434,11 @@ dd {
   stroke-width: 2;
 }
 
+.chart-hit-area {
+  fill: transparent;
+  cursor: pointer;
+}
+
 .chart-point.positive {
   fill: #86efac;
 }
@@ -439,6 +450,35 @@ dd {
 .chart-label {
   fill: var(--text-soft);
   font-size: 11px;
+}
+
+.chart-y-label {
+  fill: var(--text-soft);
+  font-size: 11px;
+}
+
+.chart-tooltip-box {
+  fill: rgba(12, 23, 29, 0.96);
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.chart-tooltip-title {
+  fill: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chart-tooltip-value {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chart-tooltip-value.positive {
+  fill: #86efac;
+}
+
+.chart-tooltip-value.negative {
+  fill: #fca5a5;
 }
 
 .chart-legend {
